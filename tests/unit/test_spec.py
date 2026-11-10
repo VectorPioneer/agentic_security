@@ -1,8 +1,11 @@
+import json
+
 import pytest
 
 from agentic_security.http_spec import (
     InvalidHTTPSpecError,
     LLMSpec,
+    escape_special_chars_for_json,
     parse_http_spec,
 )
 
@@ -87,3 +90,17 @@ class TestLLMSpec:
         )
         with pytest.raises(ValueError, match="An image is required for this request."):
             spec.validate(prompt="", encoded_image="", encoded_audio="", files={})
+
+
+class TestEscapeSpecialCharsForJson:
+    @pytest.mark.parametrize("codepoint", range(0x20))
+    def test_every_control_character_yields_valid_json(self, codepoint):
+        prompt = f"a{chr(codepoint)}b"
+        body = '{"p": "%s"}' % escape_special_chars_for_json(prompt)
+        assert json.loads(body)["p"] == prompt
+
+    def test_quotes_backslashes_and_unicode_round_trip(self):
+        prompt = 'say "hi" \\ path\nline2\ttab é 日本語 😀'
+        body = '{"p": "%s"}' % escape_special_chars_for_json(prompt)
+        assert json.loads(body)["p"] == prompt
+        assert "é" in body and "😀" in body  # non-ASCII is kept as-is
